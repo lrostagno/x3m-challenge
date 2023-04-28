@@ -1,6 +1,6 @@
 # %%
 import pandas as pd
-import ast
+from ast import literal_eval
 import numpy as np
 #import seaborn as sns
 import matplotlib.pyplot as plt
@@ -20,7 +20,43 @@ from sklearn.svm import SVR
 from xgboost import XGBRegressor
 from sklearn.preprocessing import PolynomialFeatures
 # %%
+def unnest_rows(df, column):
+    # TODO: Add try catch
+    df.waterfall_result = df.waterfall_result.apply(literal_eval)
+    df = df.explode(column)
+    df = df.join(pd.json_normalize(df[column])).drop(column, axis=1)
+    return df
+
+    
+
+
+# %%
+def process_data(df):
+    df.waterfall_result = df.waterfall_result.apply(literal_eval)
+    df = unnest_rows(df, "waterfall_result")
+    return df
+# %%
 df = pd.read_csv('../Challege-Data.tsv', sep='\t')
+
+# %%
+df.dtypes["app_id"]
+
+# %%
+import time
+# %%
+tic = time.time()
+df_time = unnest_rows(df, "waterfall_result")
+print(time.time() - tic)
+# %%
+df_time
+# %%
+# %%
+tic = time.time()
+df["waterfall_result"] = [literal_eval(x) for x in df.waterfall_result]
+print(time.time() - tic)
+# %%
+# %%
+df
 # %%
 df.info()
 # %%
@@ -175,13 +211,7 @@ df
 # %%
 # combine columns to datetime the drop them
 
-df.waterfall_result = df.waterfall_result.apply(literal_eval)
-# explode infectedByRedion; pandas >= 0.25
-df_test = df.explode('waterfall_result')
-# %%
-df_test
-# %%
-df_concat = pd.concat([df_test, df_test.waterfall_result.apply(pd.Series)], axis=1).drop('waterfall_result', axis=1)
+
 # %%
 df_concat.loc[0]
 # %%
