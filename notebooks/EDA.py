@@ -20,6 +20,8 @@ from sklearn.svm import SVR
 from xgboost import XGBRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import LabelEncoder
+import xgboost as xgb
+from sklearn.metrics import mean_squared_error
 # %%
 def unnest_rows(df, column):
     # TODO: Add try catch
@@ -59,14 +61,14 @@ def one_hot_encode(df, column):
 
 # %%
 def clean_data(df):
-    
+
     df.waterfall_result = df.waterfall_result.apply(literal_eval)
     df = unnest_rows(df, "waterfall_result")
     df = df.drop(["event_id", "event_time", "app_id", "user_id", "id"], axis=1)
     df = remove_outliers(df)
     df = replace_low_freq_values(df, "country", 10)
     df = replace_low_freq_values(df, "connection_type", 3)
-    df = replace_low_freq_values(df, "partner", 6)
+    df = replace_low_freq_values(df, "partner", 1)
     df = one_hot_encode(df, "adtype")
     df = one_hot_encode(df, "connection_type")
     df = one_hot_encode(df, "country")
@@ -79,11 +81,13 @@ def clean_data(df):
 df = pd.read_csv('../Challege-Data.tsv', sep='\t')
 
 # %%
+df["partner"].value_counts()
+# %%
 df = clean_data(df)
 # %%
 df.iloc[0]["device"]
 # %%
-df.info()
+df
 # %%
 len(df["user_id"].unique())
 # %%
@@ -91,7 +95,7 @@ pd.set_option('display.float_format', lambda x: '%.2f' % x)
 df.describe().T.round(3)
 
 # %%
-
+len(df.columns)
 
 # %%
 columns = ['partner']
@@ -109,15 +113,18 @@ df["app_id"].unique()
 df.corr()
 # %%
 
-df["error"].unique()
+df["partner"].value_counts()
 
 
+# %%
+df.columns
 # %%
 
 df.head()
 # %%
 def train_and_test_model(df):
-    df = df.drop(["device", "partner", "error", "auction_id"], axis=1)
+    #df = df.drop(['platform', 'country', 'adtype', 'connection_type', 'device','error', 'auction_id',], axis=1)
+    df = df.drop([ 'device','error'], axis=1)
     X = df.drop("latency", axis=1)
     y = df["latency"]
     scaler = StandardScaler()
@@ -129,9 +136,17 @@ def train_and_test_model(df):
                                             random_state=42)
     X_train = X_train["ecpm"].values.reshape(-1, 1)
     X_test = X_test["ecpm"].values.reshape(-1, 1)
-    lin_reg = LinearRegression()
+    lin_reg = RandomForestRegressor()
     lin_reg.fit(X_train, y_train)
-    return lin_reg.score(X_test, y_test)
+    print(lin_reg.score(X_test, y_test))
+    xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=1000, learning_rate=0.05)
+    
+    xgboost_model.fit(X_train, y_train)
+    y_pred = xgboost_model.predict(X_test)
+    # Evaluate the model using root mean squared error (RMSE)
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    print(f"RMSE: {rmse:.2f}")
+
     
 
 
@@ -145,42 +160,48 @@ import pickle
 with open('model.pkl', 'wb') as f:
     pickle.dump(lin_reg, f)
 # %%
-df.columns
+df = df.drop([ 'device','error'], axis=1)
+X = df.drop("latency", axis=1)
+y = df["latency"]
+scaler = StandardScaler()
+X[["ecpm"]] = scaler.fit_transform(X[["ecpm"]])
+X_train, X_test, y_train, y_test = train_test_split(
+                                        X, 
+                                        y, 
+                                        test_size=0.01, 
+                                        random_state=42)
+X_train = X_train["ecpm"].values.reshape(-1, 1)
+X_test = X_test["ecpm"].values.reshape(-1, 1)
+# lin_reg = RandomForestRegressor()
+# lin_reg.fit(X_train, y_train)
+# print(lin_reg.score(X_test, y_test))
 # %%
+xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100, learning_rate=0.05)
 
-import pandas as pd
-
-# create a sample DataFrame with an array of dictionaries
-data = {'id': [1, 2, 3], 
-        'name': ['Alice', 'Bob', 'Charlie'], 
-        'scores': [[{'math': 90, 'english': 80}, {'math': 85, 'english': 95}], 
-                   [{'math': 75, 'english': 90}], 
-                   [{'math': 80, 'english': 85}, {'math': 95, 'english': 70}, {'math': 90, 'english': 80}]]}
-
-df = pd.DataFrame(data)
+xgboost_model.fit(X_train, y_train)
+y_pred = xgboost_model.predict(X_test)
+# Evaluate the model using root mean squared error (RMSE)
+rmse = mean_squared_error(y_test, y_pred, squared=False)
+print(f"RMSE: {rmse:.2f}")
 # %%
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+mse = mean_squared_error(y_test, y_pred)
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
 
-
+print(f"Mean Squared Error: {mse:.2f}")
+print(f"Mean Absolute Error: {mae:.2f}")
+print(f"R-squared: {r2:.2f}")
 # %%
-df.columns
-# %%
+from sklearn.model_selection import GridSearchCV
+param_grid = {'n_estimators': [50, 100, 200, 500, 1000, 2000],
+              'learning_rate': [0.05, 0.1, 0.2],
+              'max_depth': [3, 4, 5]}
 
+# Perform grid search with cross-validation
+grid_search = GridSearchCV(estimator=xgboost_model, param_grid=param_grid, cv=5, n_jobs=-1)
+grid_search.fit(X_train, y_train)
 
-
-# %%
-
-
-
-# %%
-# %%
-# Add the one-hot encoded columns to the original dataframe
-
-df = one_hot_encode(df, "adtype")
-# %%
-df
-# %%
-df
-# %%
-df.drop("ban", axis=1)
-
+# Print the best parameters found
+print(grid_search.best_params_)
 # %%
