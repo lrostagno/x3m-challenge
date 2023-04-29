@@ -60,9 +60,9 @@ def one_hot_encode(df, column):
     return df
 
 # %%
-def clean_data(df):
-
-    df.waterfall_result = df.waterfall_result.apply(literal_eval)
+def clean_data():
+    df = pd.read_csv('../Challege-Data.tsv', sep='\t')
+    df["waterfall_result"] = df["waterfall_result"].apply(literal_eval)
     df = unnest_rows(df, "waterfall_result")
     df = df.drop(["event_id", "event_time", "app_id", "user_id", "id"], axis=1)
     df = remove_outliers(df)
@@ -74,25 +74,33 @@ def clean_data(df):
     df = one_hot_encode(df, "country")
     df = one_hot_encode(df, "partner")
     df = encode_binary_feature(df, "platform")
+    df["device"] = df["device"].apply(literal_eval)
+    df = df.join(pd.json_normalize(df["device"])).drop("device", axis=1)
+    df = one_hot_encode(df, "type")
+    scaler = StandardScaler()
+    df[["ecpm", "w", "h", "memory_total","ppi"]] = scaler.fit_transform(df[["ecpm", "w", "h", "memory_total", "ppi"]])
     return df
 
 
 # %%
-df = pd.read_csv('../Challege-Data.tsv', sep='\t')
+df.describe().T
 
 # %%
-df["partner"].value_counts()
+df = clean_data()
 # %%
-df = clean_data(df)
+df.corr()
 # %%
-df.iloc[0]["device"]
 # %%
-df
+df["ppi"].unique()[4]
 # %%
-len(df["user_id"].unique())
+# %%
+# %%
+df_test = df.join(pd.json_normalize(df["device"])).drop("device", axis=1)
+# %%
+df_test["type"]
 # %%
 pd.set_option('display.float_format', lambda x: '%.2f' % x)
-df.describe().T.round(3)
+df.describe(percentiles=[[.25, .5, .75, .99]]).T.round(3)
 
 # %%
 len(df.columns)
@@ -127,8 +135,7 @@ def train_and_test_model(df):
     df = df.drop([ 'device','error'], axis=1)
     X = df.drop("latency", axis=1)
     y = df["latency"]
-    scaler = StandardScaler()
-    X[["ecpm"]] = scaler.fit_transform(X[["ecpm"]])
+
     X_train, X_test, y_train, y_test = train_test_split(
                                             X, 
                                             y, 
@@ -177,13 +184,34 @@ X_test = X_test["ecpm"].values.reshape(-1, 1)
 # print(lin_reg.score(X_test, y_test))
 # %%
 xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100, learning_rate=0.05)
-
+# %%
 xgboost_model.fit(X_train, y_train)
+
+# %%
+
+# %%
+from sklearn.model_selection import GridSearchCV
+param_grid = {'n_estimators': [500, 750, 1000, 1100],
+              'learning_rate': [0.4, 0.5, 0.6],
+              'max_depth': [None]}
+
+# Perform grid search with cross-validation
+grid_search = GridSearchCV(estimator=xgboost_model, param_grid=param_grid, cv=5, n_jobs=-1)
+grid_search.fit(X_train, y_train)
+
+# Print the best parameters found
+print(grid_search.best_params_)
+# %%
+xgboost_model = xgb.XGBRegressor(objective='reg:squarederror',
+                                  max_depth=None, 
+                                  n_estimators=1000, 
+                                  learning_rate=0.4)
+xgboost_model.fit(X_train, y_train)
+# %%
 y_pred = xgboost_model.predict(X_test)
 # Evaluate the model using root mean squared error (RMSE)
 rmse = mean_squared_error(y_test, y_pred, squared=False)
 print(f"RMSE: {rmse:.2f}")
-# %%
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 mse = mean_squared_error(y_test, y_pred)
 mae = mean_absolute_error(y_test, y_pred)
@@ -192,16 +220,4 @@ r2 = r2_score(y_test, y_pred)
 print(f"Mean Squared Error: {mse:.2f}")
 print(f"Mean Absolute Error: {mae:.2f}")
 print(f"R-squared: {r2:.2f}")
-# %%
-from sklearn.model_selection import GridSearchCV
-param_grid = {'n_estimators': [50, 100, 200, 500, 1000, 2000],
-              'learning_rate': [0.05, 0.1, 0.2],
-              'max_depth': [3, 4, 5]}
-
-# Perform grid search with cross-validation
-grid_search = GridSearchCV(estimator=xgboost_model, param_grid=param_grid, cv=5, n_jobs=-1)
-grid_search.fit(X_train, y_train)
-
-# Print the best parameters found
-print(grid_search.best_params_)
 # %%
