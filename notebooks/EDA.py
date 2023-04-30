@@ -60,7 +60,7 @@ def remove_outliers(df):
     return df
 
 def one_hot_encode(df, column):
-    one_hot = pd.get_dummies(df[column])
+    one_hot = pd.get_dummies(df[column], prefix=column)
     df = pd.concat([df, one_hot], axis=1)
     df = df.drop(column, axis=1)
     return df
@@ -97,6 +97,8 @@ def clean_data(path):
 
 path = '../Challege-Data.tsv'
 df = pd.read_csv(path, sep='\t')
+# %%
+df.columns
 # %%
 literal_eval(df.iloc[6550]["waterfall_result"])
 
