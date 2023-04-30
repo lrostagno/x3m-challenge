@@ -22,11 +22,19 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import LabelEncoder
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error
+
+
 # %%
-def unnest_rows(df, column):
+# %%
+def unnest_rows(df, column, explode=False):
+    df[column] = df[column].apply(literal_eval)
     # TODO: Add try catch
-    df = df.explode(column)
-    return df.join(pd.json_normalize(df[column])).drop(column, axis=1)
+    if explode:
+        df = df.explode(column)
+    df.reset_index(inplace=True)
+    df = pd.concat([df, pd.json_normalize(df[column])], axis=1)
+    df = df.drop([column], axis=1)
+    return df
 
 # %%
 def replace_low_freq_values(df, column, freq_threshold):
@@ -62,150 +70,66 @@ def one_hot_encode(df, column):
 # %%
 def clean_data():
     df = pd.read_csv('../Challege-Data.tsv', sep='\t')
-    df["waterfall_result"] = df["waterfall_result"].apply(literal_eval)
-    df = unnest_rows(df, "waterfall_result")
-    df = df.drop(["event_id", "event_time", "app_id", "user_id", "id"], axis=1)
+    df = unnest_rows(df, "waterfall_result", explode=True)
+    df = unnest_rows(df, "device")
+    df["area"] = df["w"] 
+    df = df.drop(["id", "event_id","level_0", "index", "event_time", "app_id", 
+                  "user_id", "auction_id", "model", "hwv", "error", "partner", "w", "h"], axis=1)
     df = remove_outliers(df)
-    df = replace_low_freq_values(df, "country", 10)
+    df = replace_low_freq_values(df, "country", 8)
     df = replace_low_freq_values(df, "connection_type", 3)
-    df = replace_low_freq_values(df, "partner", 1)
+    #df = replace_low_freq_values(df, "partner", 1)
     df = one_hot_encode(df, "adtype")
     df = one_hot_encode(df, "connection_type")
     df = one_hot_encode(df, "country")
-    df = one_hot_encode(df, "partner")
+    #df = one_hot_encode(df, "partner")
     df = encode_binary_feature(df, "platform")
-    df["device"] = df["device"].apply(literal_eval)
-    df = df.join(pd.json_normalize(df["device"])).drop("device", axis=1)
-    df = one_hot_encode(df, "type")
+    df = encode_binary_feature(df, "type")
+    mean_ppi = df['ppi'].mean()
+    df['ppi'].fillna(mean_ppi, inplace=True)
     scaler = StandardScaler()
-    df[["ecpm", "w", "h", "memory_total","ppi"]] = scaler.fit_transform(df[["ecpm", "w", "h", "memory_total", "ppi"]])
+    df[["ecpm", "area", "memory_total","ppi"]] = scaler.fit_transform(df[["ecpm", "area", "memory_total", "ppi"]])
+    df = df.drop_duplicates()
     return df
 
 
-# %%
-df.describe().T
 
+# %%
+df.corr()
 # %%
 df = clean_data()
 # %%
+pd.set_option('display.float_format', lambda x: '%.5f' % x)
 df.corr()
 # %%
-# %%
-df["ppi"].unique()[4]
-# %%
-# %%
-# %%
-df_test = df.join(pd.json_normalize(df["device"])).drop("device", axis=1)
-# %%
-df_test["type"]
-# %%
-pd.set_option('display.float_format', lambda x: '%.2f' % x)
-df.describe(percentiles=[[.25, .5, .75, .99]]).T.round(3)
-
-# %%
-len(df.columns)
-
-# %%
-columns = ['partner']
-for column in columns:
-    plot_piechart(df, column)
-
-# %%
-df["event_time"].apply(lambda x : str(x)[:13]).unique()
+df.describe(percentiles=[.01, .25, .5, .75, .99]).T
 # %%
 df.columns
 # %%
-df["app_id"].unique()
-
-# %%
-df.corr()
-# %%
-
-df["partner"].value_counts()
-
-
-# %%
-df.columns
-# %%
-
 df.head()
 # %%
-def train_and_test_model(df):
-    #df = df.drop(['platform', 'country', 'adtype', 'connection_type', 'device','error', 'auction_id',], axis=1)
-    df = df.drop([ 'device','error'], axis=1)
-    X = df.drop("latency", axis=1)
-    y = df["latency"]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-                                            X, 
-                                            y, 
-                                            test_size=0.01, 
-                                            random_state=42)
-    X_train = X_train["ecpm"].values.reshape(-1, 1)
-    X_test = X_test["ecpm"].values.reshape(-1, 1)
-    lin_reg = RandomForestRegressor()
-    lin_reg.fit(X_train, y_train)
-    print(lin_reg.score(X_test, y_test))
-    xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=1000, learning_rate=0.05)
-    
-    xgboost_model.fit(X_train, y_train)
-    y_pred = xgboost_model.predict(X_test)
-    # Evaluate the model using root mean squared error (RMSE)
-    rmse = mean_squared_error(y_test, y_pred, squared=False)
-    print(f"RMSE: {rmse:.2f}")
-
-    
 
 
-
-# %%
-train_and_test_model(df)
-# %%
-predictions
-# %%
-import pickle
-with open('model.pkl', 'wb') as f:
-    pickle.dump(lin_reg, f)
-# %%
-df = df.drop([ 'device','error'], axis=1)
-X = df.drop("latency", axis=1)
-y = df["latency"]
-scaler = StandardScaler()
-X[["ecpm"]] = scaler.fit_transform(X[["ecpm"]])
+df_train = df.copy()
+X = df_train[["platform", "type", "ppi", "area", "ban",	"itt", "rew", "AR",	"BR","MX","Other country","US"]]
+y = df_train["latency"]
 X_train, X_test, y_train, y_test = train_test_split(
                                         X, 
                                         y, 
                                         test_size=0.01, 
                                         random_state=42)
-X_train = X_train["ecpm"].values.reshape(-1, 1)
-X_test = X_test["ecpm"].values.reshape(-1, 1)
-# lin_reg = RandomForestRegressor()
-# lin_reg.fit(X_train, y_train)
-# print(lin_reg.score(X_test, y_test))
-# %%
-xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=100, learning_rate=0.05)
-# %%
-xgboost_model.fit(X_train, y_train)
+# X_train = X_train["ecpm"].values.reshape(-1, 1)
+# X_test = X_test["ecpm"].values.reshape(-1, 1)
 
 # %%
+df.corr
 
 # %%
-from sklearn.model_selection import GridSearchCV
-param_grid = {'n_estimators': [500, 750, 1000, 1100],
-              'learning_rate': [0.4, 0.5, 0.6],
-              'max_depth': [None]}
-
-# Perform grid search with cross-validation
-grid_search = GridSearchCV(estimator=xgboost_model, param_grid=param_grid, cv=5, n_jobs=-1)
-grid_search.fit(X_train, y_train)
-
-# Print the best parameters found
-print(grid_search.best_params_)
+df.columns
 # %%
-xgboost_model = xgb.XGBRegressor(objective='reg:squarederror',
-                                  max_depth=None, 
+xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', 
                                   n_estimators=1000, 
-                                  learning_rate=0.4)
+                                  learning_rate=0.1)
 xgboost_model.fit(X_train, y_train)
 # %%
 y_pred = xgboost_model.predict(X_test)
@@ -220,4 +144,35 @@ r2 = r2_score(y_test, y_pred)
 print(f"Mean Squared Error: {mse:.2f}")
 print(f"Mean Absolute Error: {mae:.2f}")
 print(f"R-squared: {r2:.2f}")
+
+# %%
+from sklearn.model_selection import GridSearchCV
+param_grid = {'n_estimators': [500, 750, 1000, 1100],
+              'learning_rate': [0.4, 0.5, 0.6],
+              'max_depth': [None]}
+
+# Perform grid search with cross-validation
+grid_search = GridSearchCV(estimator=xgboost_model, param_grid=param_grid, cv=5, n_jobs=-1)
+grid_search.fit(X_train, y_train)
+
+# Print the best parameters found
+print(grid_search.best_params_)
+
+# %%
+X
+# %%
+df.columns
+# %%
+df.corr()
+# %%
+df["type"].unique()
+# %%
+df.head()
+# %%
+1.05844 * 1.47935
+# %%
+
+df["area"] = df["w"] *df["h"]
+# %%
+df["area"]
 # %%
