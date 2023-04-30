@@ -56,7 +56,7 @@ def plot_piechart(df, column):
 def remove_outliers(df):
     # TODO: Parametrizar esta función
     df = df[df["latency"] <= 1000]
-    df = df[df["ecpm"] <= 15]
+    # df = df[df["ecpm"] <= 2]
     return df
 
 def one_hot_encode(df, column):
@@ -98,7 +98,7 @@ def clean_data(path):
 path = '../Challege-Data.tsv'
 df = pd.read_csv(path, sep='\t')
 # %%
-literal_eval(df.iloc[9000]["waterfall_result"])
+literal_eval(df.iloc[6550]["waterfall_result"])
 
 # %%
 len(df)
@@ -115,10 +115,10 @@ df = clean_data(path)
 df.head()
 
 # %%
-df = clean_data()
-
+df["ban"].sum() + df["rew"].sum() + df["itt"].sum()
+len(df)
 # %%
-
+df.corr()
 # %%
 df_train = df.copy()
 df_train.rename(columns={417183118 : 's_417183118', 551299377 : 's_551299377'}, inplace=True)
@@ -138,7 +138,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 # %%
 from sklearn.ensemble import RandomForestRegressor
 
-model = RandomForestRegressor(n_estimators=600)
+model = RandomForestRegressor(n_estimators=300)
 
 model.fit(X_train, y_train)
 # %%
@@ -179,4 +179,29 @@ with open(filename, 'wb') as file:
 X_test
 # %%
 y_test
+# %%
+model.score(X_test, y_test)
+# %%
+y_train.describe()
+# %%
+y_test.describe()
+# %%
+import xgboost as xgb
+params = {'objective': 'reg:squarederror', # use squared error as the objective function
+          'colsample_bytree': 0.3, # fraction of columns to use when constructing each tree
+          'learning_rate': 0.05, # step size shrinkage used to prevent overfitting
+          'max_depth': None, # maximum depth of each tree
+          'alpha': 10, # L1 regularization term on weights
+          'n_estimators': 3000} # number of trees in the model
+
+# Create XGBoost regressor object
+model = xgb.XGBRegressor(**params)
+# %%
+model.fit(X_train, y_train)
+# %%
+evaluate_model(model, X_test, y_test)
+# %%
+evaluate_model(model, X_train, y_train)
+# %%
+y_test.describe()
 # %%
