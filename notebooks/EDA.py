@@ -22,13 +22,8 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import LabelEncoder
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error
-
-
-
-
 # %%
 
-# %%
 def unnest_rows(df, column, explode=False):
     df[column] = df[column].apply(literal_eval)
     # TODO: Add try catch
@@ -39,19 +34,19 @@ def unnest_rows(df, column, explode=False):
     df = df.drop([column], axis=1)
     return df
 
-# %%
+
 def replace_low_freq_values(df, column, freq_threshold):
     col_pct = df[column].value_counts(normalize=True) * 100
     low_freq_values = col_pct[col_pct < freq_threshold].index.tolist()
     df[column] = df[column].replace(low_freq_values, f'Other {column}')
     return df
 
-# %%
+
 def encode_binary_feature(df, column):
     le = LabelEncoder()
     df[column] = le.fit_transform(df[column])
     return df
-# %%
+
 def plot_piechart(df, column):
     counts = df[column].value_counts()
     plt.pie(counts.values, labels=counts.index.values, autopct='%1.1f%%')
@@ -60,8 +55,8 @@ def plot_piechart(df, column):
     
 def remove_outliers(df):
     # TODO: Parametrizar esta función
-    df = df[df["latency"] <= 3435]
-    df = df[df["ecpm"] <= 79]
+    df = df[df["latency"] <= 1000]
+    df = df[df["ecpm"] <= 15]
     return df
 
 def one_hot_encode(df, column):
@@ -70,71 +65,82 @@ def one_hot_encode(df, column):
     df = df.drop(column, axis=1)
     return df
 
-# %%
-def clean_data():
-    df = pd.read_csv('../Challege-Data.tsv', sep='\t')
+
+def clean_data(path):
+    df = pd.read_csv(path, sep='\t')
     df = unnest_rows(df, "waterfall_result", explode=True)
     df = unnest_rows(df, "device")
     df["area"] = df["w"] * df["h"]
-    df = df.drop(["id", "event_id","level_0", "index", "event_time", "app_id", 
+    df = df.drop(["id", "event_id","level_0", "index", "event_time",
                   "user_id", "auction_id", "model", "hwv", "error", "w", "h", 
                   "memory_total"], axis=1)
     df = remove_outliers(df)
     df = replace_low_freq_values(df, "country", 8)
     df = replace_low_freq_values(df, "connection_type", 3)
     df = replace_low_freq_values(df, "partner", 1)
+    df = replace_low_freq_values(df, "app_id", 5)
     df = one_hot_encode(df, "adtype")
     df = one_hot_encode(df, "connection_type")
     df = one_hot_encode(df, "country")
     df = one_hot_encode(df, "partner")
+    df = one_hot_encode(df, "app_id")
     df = encode_binary_feature(df, "platform")
     df = encode_binary_feature(df, "type")
     mean_ppi = df['ppi'].mean()
     df['ppi'].fillna(mean_ppi, inplace=True)
-    scaler = StandardScaler()
-    df[["ecpm", "area", "ppi"]] = scaler.fit_transform(df[["ecpm", "area", "ppi"]])
+    #scaler = StandardScaler()
+    #df[["ecpm", "area", "ppi"]] = scaler.fit_transform(df[["ecpm", "area", "ppi"]])
     df = df.drop_duplicates()
     return df
 
-
-
-
 # %%
-df = clean_data()
+
+path = '../Challege-Data.tsv'
+df = pd.read_csv(path, sep='\t')
 # %%
-pd.set_option('display.float_format', lambda x: '%.5f' % x)
-df.corr()
-# %%
-df.describe(percentiles=[.01, .25, .5, .75, .9, .95, .97, .98, .99]).T
+literal_eval(df.iloc[9000]["waterfall_result"])
+
 # %%
 len(df)
 # %%
-df.columns
+names = []
+for name in df.columns:
+    if str(name)[0].capitalize() == str(name)[0]:
+        names.append(str(name))
+
+print(names)
+# %%
+df = clean_data(path)
+# %%
+df.head()
+
+# %%
+df = clean_data()
+
+# %%
+
 # %%
 df_train = df.copy()
-X = df_train.drop(["latency", 'AdMob', 'AdView', 'AppLovin',
-       'Chartboost', 'DFP', 'Fyber', 'HyprMX', 'InMobi', 'IronSource',
-       'Mintegral', 'Ogury', 'Other partner', 'Pangle', 'Startio', 'Unity',
-       'Vungle'], axis=1)
+df_train.rename(columns={417183118 : 's_417183118', 551299377 : 's_551299377'}, inplace=True)
+cols = df_train.columns.tolist()
+# X = df_train.drop(["latency", 'AdMob', 'AdView', 'AppLovin',
+#        'Chartboost', 'DFP', 'Fyber', 'HyprMX', 'InMobi', 'IronSource',
+#        'Mintegral', 'Ogury', 'Other partner', 'Pangle', 'Startio', 'Unity',
+#        'Vungle'], axis=1)
+#X = df_train.drop(["latency"], axis=1)
+X = df_train[cols].drop(["latency"], axis=1)
 y = df_train["latency"]
 X_train, X_test, y_train, y_test = train_test_split(
                                         X, 
                                         y, 
                                         test_size=0.01, 
                                         random_state=42)
-# X_train = X_train["ecpm"].values.reshape(-1, 1)
-# X_test = X_test["ecpm"].values.reshape(-1, 1)
+# %%
+from sklearn.ensemble import RandomForestRegressor
 
-# %%
-X_train.corr()
+model = RandomForestRegressor(n_estimators=600)
 
-# %%
-print("saf")
-# %%
-xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', 
-                                  n_estimators=1200, 
-                                  learning_rate=0.4)
-xgboost_model.fit(X_train, y_train)
+model.fit(X_train, y_train)
 # %%
 def evaluate_model(model, X_test, y_test):
     from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -147,59 +153,30 @@ def evaluate_model(model, X_test, y_test):
     mae = mean_absolute_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
 
-    print(f"Mean Squared Error: {mse:.2f}")
-    print(f"Mean Absolute Error: {mae:.2f}")
-    print(f"R-squared: {r2:.2f}")
+    print(f"Mean Squared Error: {mse:.5f}")
+    print(f"Mean Absolute Error: {mae:.5f}")
+    print(f"R-squared: {r2:.5f}")
+
+evaluate_model(model, X_test, y_test)
+# %%
+evaluate_model(model, X_train, y_train)
 
 # %%
 
-evaluate_model(xgboost_model, X_test, y_test)
 # %%
-from sklearn.model_selection import GridSearchCV
-param_grid = {'n_estimators': [900, 1000, 1100],
-              'learning_rate': [0.1, 0.25, 0.4],
-              'max_depth': [None]}
+X_train
+# %%
+X_test
+# %%
+import pickle
 
-# Perform grid search with cross-validation
-grid_search = GridSearchCV(estimator=xgboost_model, param_grid=param_grid, cv=5, n_jobs=-1)
-grid_search.fit(X_train, y_train)
 
-# Print the best parameters found
-print(grid_search.best_params_)
-
+# Save the model as a pickle file
+filename = 'model_02.pkl'
+with open(filename, 'wb') as file:
+    pickle.dump(model, file)
 # %%
-X
+X_test
 # %%
-df.columns
-# %%
-df.corr()
-# %%
-df["type"].unique()
-# %%
-df.head()
-# %%
-1.05844 * 1.47935
-# %%
-
-df["area"] = df["w"] *df["h"]
-# %%
-df["area"]
-# %%
-df.corr()
-# %%
-y_pred = rf.predict(X_test)
-# Evaluate the model using root mean squared error (RMSE)
-rmse = mean_squared_error(y_test, y_pred, squared=False)
-print(f"RMSE: {rmse:.2f}")
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-mse = mean_squared_error(y_test, y_pred)
-mae = mean_absolute_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
-
-print(f"Mean Squared Error: {mse:.2f}")
-print(f"Mean Absolute Error: {mae:.2f}")
-print(f"R-squared: {r2:.2f}")
-# %%
-rf = RandomForestRegressor(n_estimators=1000)
-rf.fit(X_train, y_train)
+y_test
 # %%
