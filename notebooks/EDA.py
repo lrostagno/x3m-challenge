@@ -24,7 +24,10 @@ import xgboost as xgb
 from sklearn.metrics import mean_squared_error
 
 
+
+
 # %%
+
 # %%
 def unnest_rows(df, column, explode=False):
     df[column] = df[column].apply(literal_eval)
@@ -57,7 +60,7 @@ def plot_piechart(df, column):
     
 def remove_outliers(df):
     # TODO: Parametrizar esta función
-    df = df[df["latency"] <= 1000]
+    df = df[df["latency"] <= 3435]
     df = df[df["ecpm"] <= 79]
     return df
 
@@ -72,46 +75,47 @@ def clean_data():
     df = pd.read_csv('../Challege-Data.tsv', sep='\t')
     df = unnest_rows(df, "waterfall_result", explode=True)
     df = unnest_rows(df, "device")
-    df["area"] = df["w"] 
+    df["area"] = df["w"] * df["h"]
     df = df.drop(["id", "event_id","level_0", "index", "event_time", "app_id", 
-                  "user_id", "auction_id", "model", "hwv", "error", "partner", "w", "h"], axis=1)
+                  "user_id", "auction_id", "model", "hwv", "error", "w", "h", 
+                  "memory_total"], axis=1)
     df = remove_outliers(df)
     df = replace_low_freq_values(df, "country", 8)
     df = replace_low_freq_values(df, "connection_type", 3)
-    #df = replace_low_freq_values(df, "partner", 1)
+    df = replace_low_freq_values(df, "partner", 1)
     df = one_hot_encode(df, "adtype")
     df = one_hot_encode(df, "connection_type")
     df = one_hot_encode(df, "country")
-    #df = one_hot_encode(df, "partner")
+    df = one_hot_encode(df, "partner")
     df = encode_binary_feature(df, "platform")
     df = encode_binary_feature(df, "type")
     mean_ppi = df['ppi'].mean()
     df['ppi'].fillna(mean_ppi, inplace=True)
     scaler = StandardScaler()
-    df[["ecpm", "area", "memory_total","ppi"]] = scaler.fit_transform(df[["ecpm", "area", "memory_total", "ppi"]])
+    df[["ecpm", "area", "ppi"]] = scaler.fit_transform(df[["ecpm", "area", "ppi"]])
     df = df.drop_duplicates()
     return df
 
 
 
-# %%
-df.corr()
+
 # %%
 df = clean_data()
 # %%
 pd.set_option('display.float_format', lambda x: '%.5f' % x)
 df.corr()
 # %%
-df.describe(percentiles=[.01, .25, .5, .75, .99]).T
+df.describe(percentiles=[.01, .25, .5, .75, .9, .95, .97, .98, .99]).T
+# %%
+len(df)
 # %%
 df.columns
 # %%
-df.head()
-# %%
-
-
 df_train = df.copy()
-X = df_train[["platform", "type", "ppi", "area", "ban",	"itt", "rew", "AR",	"BR","MX","Other country","US"]]
+X = df_train.drop(["latency", 'AdMob', 'AdView', 'AppLovin',
+       'Chartboost', 'DFP', 'Fyber', 'HyprMX', 'InMobi', 'IronSource',
+       'Mintegral', 'Ogury', 'Other partner', 'Pangle', 'Startio', 'Unity',
+       'Vungle'], axis=1)
 y = df_train["latency"]
 X_train, X_test, y_train, y_test = train_test_split(
                                         X, 
@@ -122,33 +126,38 @@ X_train, X_test, y_train, y_test = train_test_split(
 # X_test = X_test["ecpm"].values.reshape(-1, 1)
 
 # %%
-df.corr
+X_train.corr()
 
 # %%
-df.columns
+print("saf")
 # %%
 xgboost_model = xgb.XGBRegressor(objective='reg:squarederror', 
-                                  n_estimators=1000, 
-                                  learning_rate=0.1)
+                                  n_estimators=1200, 
+                                  learning_rate=0.4)
 xgboost_model.fit(X_train, y_train)
 # %%
-y_pred = xgboost_model.predict(X_test)
-# Evaluate the model using root mean squared error (RMSE)
-rmse = mean_squared_error(y_test, y_pred, squared=False)
-print(f"RMSE: {rmse:.2f}")
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-mse = mean_squared_error(y_test, y_pred)
-mae = mean_absolute_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
+def evaluate_model(model, X_test, y_test):
+    from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+    y_pred = model.predict(X_test)
 
-print(f"Mean Squared Error: {mse:.2f}")
-print(f"Mean Absolute Error: {mae:.2f}")
-print(f"R-squared: {r2:.2f}")
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    print(f"RMSE: {rmse:.2f}")
+
+    mse = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    print(f"Mean Squared Error: {mse:.2f}")
+    print(f"Mean Absolute Error: {mae:.2f}")
+    print(f"R-squared: {r2:.2f}")
 
 # %%
+
+evaluate_model(xgboost_model, X_test, y_test)
+# %%
 from sklearn.model_selection import GridSearchCV
-param_grid = {'n_estimators': [500, 750, 1000, 1100],
-              'learning_rate': [0.4, 0.5, 0.6],
+param_grid = {'n_estimators': [900, 1000, 1100],
+              'learning_rate': [0.1, 0.25, 0.4],
               'max_depth': [None]}
 
 # Perform grid search with cross-validation
@@ -175,4 +184,22 @@ df.head()
 df["area"] = df["w"] *df["h"]
 # %%
 df["area"]
+# %%
+df.corr()
+# %%
+y_pred = rf.predict(X_test)
+# Evaluate the model using root mean squared error (RMSE)
+rmse = mean_squared_error(y_test, y_pred, squared=False)
+print(f"RMSE: {rmse:.2f}")
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+mse = mean_squared_error(y_test, y_pred)
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f"Mean Squared Error: {mse:.2f}")
+print(f"Mean Absolute Error: {mae:.2f}")
+print(f"R-squared: {r2:.2f}")
+# %%
+rf = RandomForestRegressor(n_estimators=1000)
+rf.fit(X_train, y_train)
 # %%
