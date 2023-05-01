@@ -189,3 +189,29 @@ evaluate_model(model, X_train, y_train)
 # %%
 y_test.describe()
 # %%
+from sklearn.model_selection import GridSearchCV
+model = xgb.XGBRegressor(objective ='reg:squarederror')
+
+# Set up the grid search
+params = {
+    'max_depth': [None],
+    'learning_rate': [0.05],
+    'n_estimators': [500, 1000, 2000, 3000]
+}
+grid_search = GridSearchCV(estimator=model, param_grid=params, cv=5, n_jobs=-1)
+
+# Fit the grid search to the training data
+grid_search.fit(X_train, y_train)
+
+# Save the best model as a pickle file
+with open('best_model.pkl', 'wb') as f:
+    pickle.dump(grid_search.best_estimator_, f)
+
+# Print the best parameters and score
+print("Best parameters:", grid_search.best_params_)
+print("Best score:", grid_search.best_score_)
+# %%
+df_test = pd.DataFrame({"A": ["asdf", "asdf"], "B": ["asdf", "324"]})
+# %%
+df_test[["A", "B"]].to_json(orient="records")
+# %%
