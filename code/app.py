@@ -4,7 +4,13 @@ import pandas as pd
 from utils import *
 
 app = Flask(__name__)
-model = pickle.load(open('/home/leandro/Documents/OTHERS/ML/x3m-challenge/code/model_API.pkl', 'rb'))
+
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+model_path = os.environ.get('MODEL_PATH')
+model = pickle.load(open(model_path, 'rb'))
 
 
 @app.route('/predict', methods=['POST'])
