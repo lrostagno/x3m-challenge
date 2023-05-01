@@ -1,31 +1,31 @@
 from flask import Flask, request, jsonify
 import pickle
 import numpy as np
+import pandas as pd
+from io import BytesIO
 
 app = Flask(__name__)
 
-# Load the trained model
-#model = pickle.load(open('model.pkl', 'rb'))
+
+model = pickle.load(open('model.pkl', 'rb'))
 
 
 # Define a route to accept POST requests
 @app.route('/predict', methods=['POST'])
 def predict():
     # Get the features from the POST request
-    a = request.json['a']
-    b = request.json['b']
+    data = request.get_json()
+    df = pd.DataFrame.from_dict(data)
 
-    # Convert the features to a numpy array
-    #features = np.array(features).reshape(1, -1)
-
-    # Make a prediction using the model
-    #prediction = model.predict(features)
-
-    # Return the prediction as a JSON response
-    # response = {'prediction': float(prediction)}
-    response = {'latency' : a + b}
+    response = {'latency' : df.iloc[0]["event_id"]}
+    print(response)
     return jsonify(response)
 
 if __name__ == '__main__':
     # Run the app on port 5000
     app.run(port=5000, debug=True)
+
+
+
+def raw_prediction():
+    pass

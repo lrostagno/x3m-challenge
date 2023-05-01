@@ -30,6 +30,7 @@ def unnest_rows(df, column, explode=False):
     if explode:
         df = df.explode(column)
     df.reset_index(inplace=True)
+    #df = pd.concat([df, pd.json_normalize(df[column], meta_prefix=column, sep='_')], axis=1)
     df = pd.concat([df, pd.json_normalize(df[column])], axis=1)
     df = df.drop([column], axis=1)
     return df
@@ -38,7 +39,7 @@ def unnest_rows(df, column, explode=False):
 def replace_low_freq_values(df, column, freq_threshold):
     col_pct = df[column].value_counts(normalize=True) * 100
     low_freq_values = col_pct[col_pct < freq_threshold].index.tolist()
-    df[column] = df[column].replace(low_freq_values, f'Other {column}')
+    df[column] = df[column].replace(low_freq_values, f'other_{column}')
     return df
 
 
@@ -60,13 +61,13 @@ def remove_outliers(df):
     return df
 
 def one_hot_encode(df, column):
-    one_hot = pd.get_dummies(df[column], prefix=column)
+    one_hot = pd.get_dummies(df[column], prefix=column, prefix_sep=",")
     df = pd.concat([df, one_hot], axis=1)
     df = df.drop(column, axis=1)
     return df
 
 
-def clean_data(path):
+def clean_data(path, training=False):
     df = pd.read_csv(path, sep='\t')
     df = unnest_rows(df, "waterfall_result", explode=True)
     df = unnest_rows(df, "device")
@@ -84,8 +85,9 @@ def clean_data(path):
     df = one_hot_encode(df, "country")
     df = one_hot_encode(df, "partner")
     df = one_hot_encode(df, "app_id")
-    df = encode_binary_feature(df, "platform")
-    df = encode_binary_feature(df, "type")
+    df = one_hot_encode(df, "platform")
+    df = one_hot_encode(df, "type")
+    # TODO: ver esto de los nan
     mean_ppi = df['ppi'].mean()
     df['ppi'].fillna(mean_ppi, inplace=True)
     #scaler = StandardScaler()
@@ -96,34 +98,11 @@ def clean_data(path):
 # %%
 
 path = '../Challege-Data.tsv'
-df = pd.read_csv(path, sep='\t')
-# %%
-df.columns
-# %%
-literal_eval(df.iloc[6550]["waterfall_result"])
-
-# %%
-len(df)
-# %%
-names = []
-for name in df.columns:
-    if str(name)[0].capitalize() == str(name)[0]:
-        names.append(str(name))
-
-print(names)
-# %%
 df = clean_data(path)
 # %%
-df.head()
 
 # %%
-df["ban"].sum() + df["rew"].sum() + df["itt"].sum()
-len(df)
-# %%
-df.corr()
-# %%
 df_train = df.copy()
-df_train.rename(columns={417183118 : 's_417183118', 551299377 : 's_551299377'}, inplace=True)
 cols = df_train.columns.tolist()
 # X = df_train.drop(["latency", 'AdMob', 'AdView', 'AppLovin',
 #        'Chartboost', 'DFP', 'Fyber', 'HyprMX', 'InMobi', 'IronSource',
@@ -138,9 +117,12 @@ X_train, X_test, y_train, y_test = train_test_split(
                                         test_size=0.01, 
                                         random_state=42)
 # %%
+X_train
+# %%
+
 from sklearn.ensemble import RandomForestRegressor
 
-model = RandomForestRegressor(n_estimators=300)
+model = RandomForestRegressor(n_estimators=10)
 
 model.fit(X_train, y_train)
 # %%
@@ -174,7 +156,7 @@ import pickle
 
 
 # Save the model as a pickle file
-filename = 'model_02.pkl'
+filename = 'model_API.pkl'
 with open(filename, 'wb') as file:
     pickle.dump(model, file)
 # %%
@@ -194,7 +176,7 @@ params = {'objective': 'reg:squarederror', # use squared error as the objective 
           'learning_rate': 0.05, # step size shrinkage used to prevent overfitting
           'max_depth': None, # maximum depth of each tree
           'alpha': 10, # L1 regularization term on weights
-          'n_estimators': 3000} # number of trees in the model
+          'n_estimators': 30} # number of trees in the model
 
 # Create XGBoost regressor object
 model = xgb.XGBRegressor(**params)

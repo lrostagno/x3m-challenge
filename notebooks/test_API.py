@@ -2,115 +2,134 @@
 import requests
 import json
 import pandas as pd
-from EDA import clean_data
+from ast import literal_eval
+from sklearn.preprocessing import LabelEncoder
+import pickle
+import xgboost as xgb
+# from EDA import clean_data
+
+
 # %%
-url = 'http://localhost:5000/predict'
-data = {'a': 4, 'b': 56}
+def set_categorical_features(row, categorical_features_dict):
+    for column, categories in categorical_features_dict.items():
+        if row[column] in categories:
+            row[f"{column},{row[column]}"] = 1
+        else:
+            row[f"{column},other_{column}"] = 1
+    return row
+
+def split_array_to_dict(arr):
+    d = {}
+    [d.setdefault(k, []).append(v) for k, v in [elem.split(',',1) for elem in arr if len(elem.split(',', 1)) > 1]]
+    return d
+
+
+def unnest_rows(df, column, explode=False):
+    df[column] = df[column].apply(literal_eval)
+    # TODO: Add try catch
+    if explode:
+        df = df.explode(column)
+    df.reset_index(inplace=True)
+    df = pd.concat([df, pd.json_normalize(df[column])], axis=1)
+    df = df.drop([column], axis=1)
+    return df
+
+
+def one_hot_encode(df, column):
+    one_hot = pd.get_dummies(df[column], prefix=column)
+    df = pd.concat([df, one_hot], axis=1)
+    df = df.drop(column, axis=1)
+    return df
+
+def encode_binary_feature(df, column):
+    le = LabelEncoder()
+    df[column] = le.fit_transform(df[column])
+    return df
 # %%
 path = '../Challege-Data.tsv'
+with open('model_API.pkl', 'rb') as f:
+    model = pickle.load(f)
 df = pd.read_csv(path, sep='\t')
 
-df.head()
+json_data = df.to_json(orient='records')
+import requests
+api_endpoint = 'http://localhost:5000/predict'
+headers = {'Content-Type': 'application/json'}
 # %%
-response = requests.post(url, json=data)
+response = requests.post(api_endpoint, headers=headers, data=json_data)
+# %%
 if response.status_code == 200:
     print(response.json())
 else:
     print('Error:', response.status_code)
-# %%
-response.json()
-# %%
-import pickle
-import xgboost as xgb
+def clean_data_inference(df):
+    df = unnest_rows(df, "waterfall_result", explode=True)
+    df = unnest_rows(df, "device")
+    df["area"] = df["w"] * df["h"]
+    df = df.drop(["id", "event_id","level_0", "index", "event_time",
+                    "user_id", "auction_id", "model", "hwv", "error", "w", "h", 
+                    "memory_total"], axis=1)
 
-# Load the model from file
-with open('model.pkl', 'rb') as f:
-    model = pickle.load(f)
-# %%
-model.feature_names_in_
-# %%
-a = df.head(2).to_json()
-# %%
-type(a)
-# %%
-b = json.loads(a)
-# %%
-b.keys()
-# %%
-b["event_id"]
-# %%
-data = df.head(5).to_dict(orient='records')
-# %%
-len(data)
-# %%
-# %%
-# %%
-json_data = json.dumps(data)
+    categorical_features_dict = split_array_to_dict(model.feature_names_in_)
+    cols_to_add = set(model.feature_names_in_).difference(set(df.columns))
+    cols_to_remove = set(df.columns).difference(set(model.feature_names_in_))
+    df = pd.concat([df, pd.DataFrame(0, index=df.index, columns=cols_to_add)], axis=1)
+    df = df.copy()
+    df = df.apply(set_categorical_features, axis=1, args=(categorical_features_dict,))
+    df = df.drop(cols_to_remove, axis=1)
+    if len(df) != len(df.dropna()):
+        print("Advertencia... algunos datos están incompletos y serán eliminados")
+    df = df.dropna()
+    return df
+
 
 # %%
+df_cleaned = clean_data_inference(df.head(100))
 
 # %%
-I have an array like this:
-['partner_APS', 'partner_AdColony', 'partner_AdMob', 'partner_AdView', 'country_AR', 'country_BR', 'country_US']
-And i need to get a dictionary like this:
-{'partner': ['APS', 'AdColony', 'AdMob', 'AdView'], 'country' : ['AR', 'BR', 'US']}
-# %%
+import pandas as pd
+import tempfile
+import os
 
-def split_array_to_dict(arr):
-    d = {}
-    for elem in arr:
-        key, value = elem.split('_', 1)
-        if key in d:
-            d[key].append(value)
-        else:
-            d[key] = [value]
-    return d
-# %%
-arr = ['partner_APS', 'partner_AdColony', 'partner_AdMob', 'partner_AdView', 'country_MX','country_AR', 'country_BR', 'country_US']
-# %%
-my_dict = split_array_to_dict(arr)
-# %%
-def split_array_to_dict(arr):
-    d = {}
-    [d.setdefault(k, []).append(v) for k, v in [elem.split('_', 1) for elem in arr]]
-    return d
+
+
+
+
+    
 
 # %%
 
 
-
 # %%
-arr = split_array_to_dict(arr)
-# %%
-arr.keys()
-# %%
-for i in range(len(df_test)):
-    column = "country"
-    print(df_test.iloc[i][column] in my_dict[column])
-    if df_test.iloc[i][column] in my_dict[column]:
-        df_test.iloc[i][f"column_{my_dict[column]}"] = 1
-    else:
-        df_test.iloc[i][f"other_{column}"] = 1
-
-    if i == 5:
-        break
-# %%
-df.iloc[1]
-# %%
-df_test = df.copy()
+model.predict(json.loads(x))
 # %%
 
 # %%
-df_test["BR"].value_counts()
+import numpy as np
+json_data = x
+
+data = json.loads(json_data)
+
+values = np.array([list(data.values())])
+
+
+prediction = model.predict(values)
+# %%
+x
+# %%
+X_test = pd.DataFrame.from_dict(df)
+# %%
 # %%
 
-# ESTA LISTA YA LA TENGO
-new_columns = ["country_AR", "country_BR", "country_MX", "country_US", "other_country"]
-df_test = pd.concat([df_test, pd.DataFrame(0, index=df_test.index, columns=new_columns)], axis=1)
 # %%
-df
-# %%
+x = df.head(10).to_json(orient='records')
 
-df_test
+# %%
+df_test = pd.DataFrame.from_dict(json.loads(x))
+# %%
+df_test = pd.DataFrame.from_dict(json.loads(x))
+
+# %%
+df_test.drop_index()
 
 # %%
