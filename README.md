@@ -2,7 +2,10 @@
 
 ## Pasos para probar la API:
 
-1. git clone `https://github.com/lrostagno/x3m-challenge.git`
+1. Clonar el repositorio: 
+
+    * `git clone https://github.com/lrostagno/x3m-challenge.git`
+
 
 2. Moverse a la carpeta del proyecto con el comando `cd`
 
