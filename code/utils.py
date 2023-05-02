@@ -24,7 +24,6 @@ def split_array_to_dict(arr):
 
 def unnest_rows(df, column, explode=False):
     df[column] = df[column].apply(literal_eval)
-    # TODO: Add try catch
     if explode:
         df = df.explode(column)
     df.reset_index(inplace=True)
@@ -43,7 +42,6 @@ def encode_binary_feature(df, column):
     le = LabelEncoder()
     df[column] = le.fit_transform(df[column])
     return df
-
 
 
 def clean_data_inference(df, model):
@@ -68,14 +66,11 @@ def clean_data_inference(df, model):
     return df
 
 
-
 def unnest_rows(df, column, explode=False):
     df[column] = df[column].apply(literal_eval)
-    # TODO: Add try catch
     if explode:
         df = df.explode(column)
     df.reset_index(inplace=True)
-    #df = pd.concat([df, pd.json_normalize(df[column], meta_prefix=column, sep='_')], axis=1)
     df = pd.concat([df, pd.json_normalize(df[column])], axis=1)
     df = df.drop([column], axis=1)
     return df
@@ -93,12 +88,9 @@ def encode_binary_feature(df, column):
     df[column] = le.fit_transform(df[column])
     return df
 
-
     
-def remove_outliers(df):
-    # TODO: Parametrizar esta función
-    df = df[df["latency"] <= 1000]
-    # df = df[df["ecpm"] <= 2]
+def remove_outliers(df, column, threshold):
+    df = df[df[column] <= threshold]
     return df
 
 def one_hot_encode(df, column):
@@ -107,20 +99,11 @@ def one_hot_encode(df, column):
     df = df.drop(column, axis=1)
     return df
 
-
-def clean_data(path, training=False):
-    df = pd.read_csv(path, sep='\t')
-    df = unnest_rows(df, "waterfall_result", explode=True)
-    df = unnest_rows(df, "device")
-    df["area"] = df["w"] * df["h"]
-    df = df.drop(["id", "event_id","level_0", "index", "event_time",
-                  "user_id", "auction_id", "model", "hwv", "error", "w", "h", 
-                  "memory_total"], axis=1)
-    df = remove_outliers(df)
-    df = replace_low_freq_values(df, "country", 8)
-    df = replace_low_freq_values(df, "connection_type", 3)
-    df = replace_low_freq_values(df, "partner", 1)
-    df = replace_low_freq_values(df, "app_id", 5)
+def process_categorical_features(df):
+    df = replace_low_freq_values(df, "country", 10)
+    df = replace_low_freq_values(df, "connection_type", 10)
+    df = replace_low_freq_values(df, "partner", 10)
+    df = replace_low_freq_values(df, "app_id", 10)
     df = one_hot_encode(df, "adtype")
     df = one_hot_encode(df, "connection_type")
     df = one_hot_encode(df, "country")
@@ -128,26 +111,31 @@ def clean_data(path, training=False):
     df = one_hot_encode(df, "app_id")
     df = one_hot_encode(df, "platform")
     df = one_hot_encode(df, "type")
-    # TODO: ver esto de los nan
-    mean_ppi = df['ppi'].mean()
-    df['ppi'].fillna(mean_ppi, inplace=True)
-    #scaler = StandardScaler()
-    #df[["ecpm", "area", "ppi"]] = scaler.fit_transform(df[["ecpm", "area", "ppi"]])
+    return df
+
+
+def download_and_clean_data(path):
+    df = pd.read_csv(path, sep='\t')
+    df = unnest_rows(df, "waterfall_result", explode=True)
+    df = unnest_rows(df, "device")
+    df["area"] = df["w"] * df["h"]
+    df = df.drop(["id", "event_id","level_0", "index", "event_time",
+                  "user_id", "auction_id", "model", "hwv", "error", "w", "h", "ppi",
+                  "memory_total"], axis=1)
+    df = remove_outliers(df, "latency", 1000)
+    df = process_categorical_features(df)
+    df = df.dropna()
     df = df.drop_duplicates()
     return df
 
 
 def evaluate_model(model, X_test, y_test):
-
     y_pred = model.predict(X_test)
-
     rmse = mean_squared_error(y_test, y_pred, squared=False)
     print(f"RMSE: {rmse:.2f}")
-
     mse = mean_squared_error(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
-
     print(f"Mean Squared Error: {mse:.5f}")
     print(f"Mean Absolute Error: {mae:.5f}")
     print(f"R-squared: {r2:.5f}")

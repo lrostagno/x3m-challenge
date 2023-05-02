@@ -19,19 +19,3 @@ else:
 
 
 
-# %%
-import json
-[d["latency"] for d in json.loads(response.json()["predictions"])]
-# %%
-df
-# %%
-l = 0
-k = 99999999999999
-df_l_to_k = df.iloc[l:k]
-# %%
-len(df_l_to_k) == len(df)
-# %%
-len(df_l_to_k)
-# %%
-len(df)
-# %%
