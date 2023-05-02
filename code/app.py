@@ -17,7 +17,7 @@ model = pickle.load(open(model_path, 'rb'))
 def predict():
     data = request.get_json()
     df = pd.DataFrame.from_dict(data)
-    df_predictions = clean_data_inference(df.head(3), model)
+    df_predictions = clean_data_inference(df, model)
     predictions = model.predict(df_predictions[model.feature_names_in_]).tolist()
     predictions = [int(x) for x in predictions]
     df_predictions["latency"] = predictions

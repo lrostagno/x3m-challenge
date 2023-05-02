@@ -12,7 +12,7 @@
    * `conda activate x3m-challenge`
    * `conda install --file requirements.txt`
 
-4. Descargar el modelo: `https:...asdf....`
+4. Descargar el modelo: `https://drive.google.com/file/d/1Qy87kJz9eIepvS3RIT2e93eI0YbXvVmW/view?usp=sharing`
 
 5. Abrir el archivo `.env` en la carpeta `code` y reemplazar los valores de las variables `MODEL_PATH` por la ruta donde se encuentra el modelo, y `DATA_PATH` por la ruta donde se encuentra el dataset sobre el que se quieren realizar predicciones (se espera que tenga el mismo formato que el dataset del desafío).
 
@@ -25,6 +25,7 @@
 
 El resultado que se obtendrá de la API es un json que posee, para cada instancia del dataset, el id del evento de ejecución de waterfall, el identificador de la instancia y la latencia predecida.
 
+Se recomienda utilizar un tamaño de dataset de 2 a 20 waterfalls.
 
 ## Entrenamiento:
 El código en el que se realizó el entrenamiento está en el archivo `code/training.py`

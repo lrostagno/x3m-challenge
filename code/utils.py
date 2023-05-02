@@ -48,9 +48,10 @@ def clean_data_inference(df, model):
     df = unnest_rows(df, "waterfall_result", explode=True)
     df = unnest_rows(df, "device")
     df["area"] = df["w"] * df["h"]
-    df = df.drop(["level_0", "index", "event_time",
+    cols_to_drop = list(set(["level_0", "index", "event_time",
                     "user_id", "auction_id", "model", "hwv", "error", "w", "h", 
-                    "memory_total"], axis=1)
+                    "memory_total"]).intersection(set(df.columns)))
+    df = df.drop(cols_to_drop, axis=1)
 
     categorical_features_dict = split_array_to_dict(model.feature_names_in_)
     cols_to_add = set(model.feature_names_in_).difference(set(df.columns))

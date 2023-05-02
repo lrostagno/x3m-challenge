@@ -7,6 +7,8 @@ load_dotenv()
 data_path = os.environ.get('DATA_PATH')
 # %%
 df = pd.read_csv(data_path, sep='\t')
+# NOTA: Si el dataframe es muy largo, descomentar la linea siguiente:
+# df = df.head(10)
 json_data = df.to_json(orient='records')
 import requests
 api_endpoint = 'http://localhost:5000/predict'
@@ -19,3 +21,7 @@ else:
 
 
 
+
+
+
+# %%

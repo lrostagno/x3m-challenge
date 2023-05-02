@@ -53,4 +53,5 @@ model.fit(X, y)
 evaluate_model(model, X, y)
 # %%
 with open('latency_xgb_model.pkl', 'wb') as f:
-    pickle.dump(grid_search.best_estimator_, f)
+    pickle.dump(model, f)
+# %%
